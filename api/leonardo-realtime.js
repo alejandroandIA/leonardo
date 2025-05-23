@@ -1,5 +1,5 @@
 // File: api/leonardo-realtime.js
-// Tentativo n.2 per Vercel Edge Functions WebSocket (Echo Server)
+// Tentativo n.3 per Vercel Edge Functions WebSocket (Echo Server) - CORREZIONE SINTASSI
 
 export const config = {
   runtime: 'edge',
@@ -8,116 +8,68 @@ export const config = {
 export default async function handler(request) {
   const upgradeHeader = request.headers.get('upgrade');
   if (upgradeHeader?.toLowerCase() !== 'websocket') {
-    return new Response('Expected websocket upgrade', { status: 400 }); // 400 Bad Request se non c'è header upgrade
+    // Se non è una richiesta di upgrade WebSocket, restituisci un errore o gestiscila come una normale HTTP.
+    // Per semplicità, restituiamo un errore.
+    return new Response('Richiesta HTTP normale a un endpoint WebSocket. Atteso upgrade a WebSocket.', { status: 400 });
   }
 
-  // Questo è un pattern comune per le Edge Functions che supportano i WebSockets
-  // tramite l'oggetto Response e un TransformStream.
-  const { readable, writable } = new TransformStream();
-  const response = new Response(readable, {
-    status: 101, // Switching Protocols
-    headers: {
-      'Upgrade': 'websocket',
-      'Connection': 'Upgrade',
-    },
-    // La proprietà 'webSocket' è cruciale. Vercel (o il runtime Edge)
-    // usa questo per prendere il controllo e stabilire la connessione.
-    // Dobbiamo passare il lato scrivibile al client, e noi lavoreremo con il leggibile (o viceversa).
-    // Il nome 'webSocket' è fuorviante: si riferisce al "lato del client" del WebSocket
-    // che il server deve fornire.
-    // No, `webSocket` qui è l'oggetto che il runtime gestisce.
-    // `writable` è dove scriviamo *noi* (server) per inviare al client.
-    // `readable` è dove il client scrive e *noi* (server) leggiamo.
-    // Aspetta, è il contrario: il client scrive a `writable` (lato server), e il server legge da `readable` (lato server).
-    // Il server scrive a `writable` (lato response), e il client legge da `readable` (lato response).
-    // Confusione! Ok, chiariamo:
-    // Il `readable` della Response va al client.
-    // Il `webSocket` (che è un WritableStream) della Response è dove il client invia i dati.
-    // No, `webSocket` è un oggetto speciale, non solo un WritableStream.
-
-    // Tentiamo il pattern corretto:
-    // response.webSocket è un oggetto WebSocket che il runtime Edge crea e gestisce.
-    // Noi interagiamo con esso.
-    // Dobbiamo restituire un oggetto che contenga la parte 'server' del socket.
-    // La documentazione di Vercel per `Response.json({}, { webSocket: ... })`
-    // o `new Response(null, { webSocket: ...})` è la chiave.
-
-    // Tentativo con il pattern Vercel / WinterCG più standard:
-    // `webSocket` nella Response è un oggetto che ha metodi `send`, `addEventListener` ecc.
-    // Questo è il *nostro* lato del socket.
-    // Dobbiamo creare una coppia e dare l'altro lato al client.
-    const { socket: serverSocketForUs, response: upgradeResponse } = Deno.upgradeWebSocket(request);
-    // ^^ Questo `Deno.upgradeWebSocket` è specifico per Deno. Vercel Edge usa un runtime diverso.
-    // Ritorno al pattern TransformStream, ma gestito correttamente:
-  }
-
-  // IL PATTERN CORRETTO PER VERVCEL EDGE CON TransformStream:
-  // Creiamo un TransformStream. Il suo 'readable' andrà nella Response per il client.
-  // Il suo 'writable' sarà usato dal nostro codice server per scrivere dati AL client.
-  // Poi, per leggere DAL client, dobbiamo accedere a un altro stream che Vercel ci fornisce
-  // una volta che l'handshake è fatto, spesso associato alla request originale o un evento.
-
-  // Questo è il punto più complicato con le Edge Functions perché l'API è ancora in evoluzione
-  // e varia leggermente tra i provider (Cloudflare, Deno, Vercel).
-
-  // Rivediamo il pattern `WebSocketPair` che è il più generico per le API Edge standard.
-  // Potrebbe essere che `WebSocketPair` non sia direttamente esposto nell'ambiente Vercel Edge,
-  // o che Vercel si aspetti che l'interazione avvenga tramite l'oggetto `request`
-  // e gestendo gli stream `readable`/`writable` in un modo specifico.
-
-  // **Semplifichiamo e proviamo l'approccio che Vercel stesso suggerisce di più:**
-  // Si crea un `TransformStream`. Il `readable` va nella Response.
-  // Il server ottiene un `WritableStream` (il `writable` del `TransformStream`) per inviare dati.
-  // Il server ottiene un `ReadableStream` (dalla `request.body` se la request viene mantenuta viva,
-  // o da un evento) per leggere i dati.
-
-  // Per ora, dato il 426, il problema è ancora nell'handshake.
-  // Il client dice "bad response". Potrebbe essere che mancano gli header corretti nella response 101.
-
-  // Torniamo al pattern `WebSocketPair` ma assicurandoci che sia usato correttamente.
-  // Questo è il modo standard per gli ambienti che implementano l'API WebSocket di WinterCG.
   try {
+    // WebSocketPair è lo standard per creare una coppia di socket nelle API Edge.
+    // clientWs va restituito nella Response per l'handshake con il browser.
+    // serverWs è l'oggetto che usiamo nel backend per comunicare.
     const { 0: clientWs, 1: serverWs } = new WebSocketPair();
 
-    serverWs.accept(); // Server accetta la connessione
+    // Il server deve "accettare" la sua parte della connessione.
+    serverWs.accept(); 
 
+    // Invia un messaggio di benvenuto al client appena la connessione è stabilita.
     serverWs.send("Backend Edge (WebSocketPair): Connesso! Echo server attivo.");
     console.log("Backend Edge (WebSocketPair): Connessione aperta, messaggio di benvenuto inviato.");
 
+    // Gestore per i messaggi ricevuti dal client.
     serverWs.addEventListener('message', (event) => {
       const messageData = event.data;
       if (typeof messageData === 'string') {
         console.log("Backend Edge (WebSocketPair): Ricevuto testo:", messageData);
-        serverWs.send(`Echo: ${messageData}`);
+        serverWs.send(`Echo: ${messageData}`); // Rimanda indietro il testo con "Echo:"
       } else if (messageData instanceof ArrayBuffer) {
         console.log("Backend Edge (WebSocketPair): Ricevuto ArrayBuffer (lunghezza):", messageData.byteLength);
-        serverWs.send(messageData); // Echo dei dati binari
+        serverWs.send(messageData); // Rimanda indietro i dati binari (audio) così come sono.
       } else {
-        console.log("Backend Edge (WebSocketPair): Ricevuto tipo sconosciuto.");
-        serverWs.send("Ricevuto tipo di messaggio sconosciuto.");
+        // Gestisce altri tipi di dati se necessario, o logga un avviso.
+        console.log("Backend Edge (WebSocketPair): Ricevuto tipo di messaggio sconosciuto:", typeof messageData);
+        serverWs.send("Ricevuto tipo di messaggio sconosciuto dal backend.");
       }
     });
 
+    // Gestore per la chiusura della connessione.
     serverWs.addEventListener('close', (event) => {
-      console.log("Backend Edge (WebSocketPair): Connessione chiusa.", event.code, event.reason);
+      console.log("Backend Edge (WebSocketPair): Connessione chiusa.", `Codice: ${event.code}, Motivo: ${event.reason}`);
     });
 
-    serverWs.addEventListener('error', (error) => {
-      console.error("Backend Edge (WebSocketPair): Errore.", error);
+    // Gestore per errori WebSocket.
+    serverWs.addEventListener('error', (errorEvent) => {
+      // L'oggetto errore effettivo è spesso in errorEvent.error o errorEvent.message
+      console.error("Backend Edge (WebSocketPair): Errore WebSocket:", errorEvent.message || errorEvent.error || errorEvent);
     });
 
-    // Restituisce la response 101 con il lato client del WebSocketPair
+    // Restituisce la risposta HTTP 101 (Switching Protocols) al client,
+    // passando il lato "client" del WebSocketPair. Questo completa l'handshake.
     return new Response(null, {
       status: 101,
-      webSocket: clientWs, // Passa il "lato client" del pair alla response
-      headers: {          // Assicuriamoci che gli header siano corretti
+      webSocket: clientWs, // Questo è cruciale per l'handshake
+      headers: {
         'Upgrade': 'websocket',
-        'Connection': 'Upgrade',
+        'Connection': 'Upgrade'
+        // Nessuna virgola dopo l'ultima intestazione
       }
+      // Nessuna virgola dopo l'ultimo oggetto 'headers'
     });
 
   } catch (e) {
-    console.error("Errore durante l'inizializzazione di WebSocketPair o gestione:", e);
+    // Gestisce errori che potrebbero verificarsi durante l'inizializzazione di WebSocketPair
+    // o altre eccezioni impreviste nel blocco try.
+    console.error("Errore grave durante l'inizializzazione di WebSocketPair o gestione:", e);
     return new Response("Errore interno del server nell'inizializzazione WebSocket.", { status: 500 });
   }
 }
