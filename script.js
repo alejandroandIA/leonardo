@@ -1,103 +1,130 @@
-// File: script.js (per Leonardo Realtime)
+// File: script.js (per Leonardo Realtime con Edge Backend)
 
 const startButton = document.getElementById('startButton');
 const stopButton = document.getElementById('stopButton');
 const statusMessage = document.getElementById('statusMessage');
-const transcriptionArea = document.getElementById('transcriptionArea'); // Potremmo non usarlo subito
-const responseArea = document.getElementById('responseArea');       // Potremmo non usarlo subito
+const transcriptionArea = document.getElementById('transcriptionArea');
+const responseArea = document.getElementById('responseArea');
 
 let socket;
 let mediaRecorder;
-let audioChunks = [];
+// let audioChunks = []; // Non accumuliamo più, inviamo subito
 
-const REALTIME_API_ENDPOINT_PATH = '/api/leonardo-realtime'; // Il percorso del nostro backend WebSocket
+const REALTIME_API_ENDPOINT_PATH = '/api/leonardo-realtime';
 
 function connectWebSocket() {
-    // Determina il protocollo WebSocket (ws o wss) e l'host
     const protocol = window.location.protocol === 'https:' ? 'wss:' : 'ws:';
     const host = window.location.host;
     const socketURL = `${protocol}//${host}${REALTIME_API_ENDPOINT_PATH}`;
 
-    statusMessage.textContent = `Tentativo di connessione a: ${socketURL}`;
+    statusMessage.textContent = `Connessione a: ${socketURL}`;
     console.log(`Tentativo di connessione WebSocket a: ${socketURL}`);
+    responseArea.innerHTML = ''; 
 
     socket = new WebSocket(socketURL);
+    socket.binaryType = "arraybuffer"; // Importante per ricevere audio come ArrayBuffer
 
     socket.onopen = () => {
-        statusMessage.textContent = 'Connesso a Leonardo Realtime! Pronto per parlare.';
+        statusMessage.textContent = 'Connesso a Leonardo Realtime!';
         console.log('WebSocket Connesso!');
         startButton.disabled = false;
         stopButton.disabled = true;
+        socket.send("Ciao dal Client! (Testo)"); // Invia un messaggio di testo di test
     };
 
     socket.onmessage = (event) => {
-        // Qui riceveremo l'audio dalla IA o altri messaggi
-        // Per ora, facciamo solo un log
-        console.log('Messaggio ricevuto dal server:', event.data);
-        // In futuro, se event.data è un Blob audio, lo riprodurremo
-        if (event.data instanceof Blob) {
-            playAudio(event.data);
+        let currentContent = responseArea.innerHTML;
+        if (event.data instanceof ArrayBuffer) {
+            console.log('Ricevuto ArrayBuffer audio dal server (dimensione):', event.data.byteLength);
+            currentContent += `<i>Ricevuto ArrayBuffer audio (eco, dimensione: ${event.data.byteLength})</i><br>`;
+            // Converti ArrayBuffer in Blob per la riproduzione
+            const audioBlob = new Blob([event.data], { type: 'audio/webm' }); // Assumiamo webm per l'eco
+            playAudio(audioBlob);
+        } else if (typeof event.data === 'string') {
+            console.log('Ricevuto testo dal server:', event.data);
+            currentContent += `${event.data}<br>`;
         } else {
-            // Se è testo (es. trascrizioni o messaggi di stato)
-            responseArea.textContent = `Leonardo (server): ${event.data}`;
+            console.log('Ricevuto messaggio di tipo sconosciuto:', event.data);
+             currentContent += `<i>Ricevuto dato sconosciuto.</i><br>`;
         }
+        responseArea.innerHTML = currentContent;
+        responseArea.scrollTop = responseArea.scrollHeight; 
     };
 
     socket.onerror = (error) => {
         statusMessage.textContent = 'Errore WebSocket. Vedi console.';
         console.error('Errore WebSocket:', error);
-        startButton.disabled = true; // Disabilita se non possiamo connetterci
+        startButton.disabled = true;
     };
 
     socket.onclose = (event) => {
-        statusMessage.textContent = 'WebSocket disconnesso. Riprova a connetterti?';
+        statusMessage.textContent = 'WebSocket disconnesso.';
         console.log('WebSocket Disconnesso:', event.reason, `Codice: ${event.code}`);
         startButton.disabled = true;
-        // Potremmo tentare una riconnessione automatica qui o fornire un pulsante
     };
 }
 
 startButton.addEventListener('click', async () => {
     if (!socket || socket.readyState !== WebSocket.OPEN) {
-        statusMessage.textContent = 'WebSocket non connesso. Tentativo di riconnessione...';
-        connectWebSocket(); // Prova a connetterti se non lo sei
+        statusMessage.textContent = 'WebSocket non connesso.';
         return;
     }
 
     statusMessage.textContent = 'Avvio registrazione...';
     startButton.disabled = true;
     stopButton.disabled = false;
-    audioChunks = [];
+    responseArea.innerHTML = ''; 
+    transcriptionArea.textContent = "Stato: In attesa di audio...";
+
 
     try {
         const stream = await navigator.mediaDevices.getUserMedia({ audio: true });
-        mediaRecorder = new MediaRecorder(stream);
+        // Prova con mimeType specifici se ci sono problemi, altrimenti lascia che il browser scelga
+        const options = { mimeType: 'audio/webm;codecs=opus' }; 
+        if (!MediaRecorder.isTypeSupported(options.mimeType)) {
+            console.warn(`${options.mimeType} non supportato, provo default.`);
+            delete options.mimeType;
+        }
+        mediaRecorder = new MediaRecorder(stream, options);
 
         mediaRecorder.ondataavailable = (event) => {
             if (event.data.size > 0) {
-                audioChunks.push(event.data);
-                // Invio immediato del chunk audio via WebSocket
-                // socket.send(event.data); // <--- LO ABILITEREMO NEL PROSSIMO STEP
-                console.log('Chunk audio registrato, pronto per essere inviato (invio disabilitato per ora)');
+                if (socket && socket.readyState === WebSocket.OPEN) {
+                    // MediaRecorder fornisce un Blob, convertiamolo in ArrayBuffer per inviarlo
+                    // se il backend si aspetta ArrayBuffer, o invia il Blob direttamente
+                    // se il backend sa gestire i Blob (vedi api/leonardo-realtime.js)
+                    
+                    // Invia come ArrayBuffer:
+                    event.data.arrayBuffer().then(arrayBuffer => {
+                        socket.send(arrayBuffer);
+                        console.log('Chunk audio (ArrayBuffer) inviato al server (dimensione):', arrayBuffer.byteLength);
+                        transcriptionArea.textContent = `Stato: Invio audio chunk (${arrayBuffer.byteLength} bytes)...`;
+                    });
+                    
+                    // O invia come Blob (se il backend è stato adattato):
+                    // socket.send(event.data); 
+                    // console.log('Chunk audio (Blob) inviato al server (dimensione):', event.data.size);
+                    // transcriptionArea.textContent = `Stato: Invio audio chunk (${event.data.size} bytes)...`;
+
+                }
             }
         };
 
         mediaRecorder.onstop = () => {
-            // Questo blocco non è più il principale per l'invio se inviamo in streaming
-            // Ma può essere utile per inviare un segnale di "fine parlato"
-            console.log('Registrazione fermata.');
+            console.log('Registrazione fermata dal client.');
+            transcriptionArea.textContent = "Stato: Registrazione fermata.";
             if (socket && socket.readyState === WebSocket.OPEN) {
-                 // socket.send(JSON.stringify({ type: "EndOfSpeech" })); // Segnale di fine (futuro)
+                 socket.send(JSON.stringify({ type: "EndOfSpeech" })); // Segnale di fine
             }
-            // Per ora, non facciamo nulla qui con i chunk accumulati se inviamo in streaming
+            stream.getTracks().forEach(track => track.stop()); // Rilascia il microfono
         };
-
-        mediaRecorder.start(500); // Invia dati ogni 500ms (o un altro intervallo)
-                                // Questo abilita lo streaming dal client
-        console.log('MediaRecorder avviato, invia dati ogni 500ms.');
+        
+        mediaRecorder.start(300); // Intervallo in ms per ondataavailable
+        transcriptionArea.textContent = "Stato: Registrazione avviata, invio audio...";
+        console.log('MediaRecorder avviato, invia dati audio in streaming.');
 
     } catch (err) {
-        console.error('Errore accesso al microfono:', err);
+        console.error('Errore accesso al microfono o MediaRecorder:', err);
         statusMessage.textContent = 'Errore microfono. Controlla i permessi.';
         startButton.disabled = false;
         stopButton.disabled = true;
@@ -110,20 +137,28 @@ stopButton.addEventListener('click', () => {
     }
     startButton.disabled = false;
     stopButton.disabled = true;
-    statusMessage.textContent = 'Registrazione interrotta. Pronto per iniziare.';
+    statusMessage.textContent = 'Pronto per iniziare.';
+    transcriptionArea.textContent = "";
 });
 
 function playAudio(audioBlob) {
-    const audioUrl = URL.createObjectURL(audioBlob);
-    const audio = new Audio(audioUrl);
-    audio.play();
-    audio.onended = () => {
-        URL.revokeObjectURL(audioUrl); // Pulisce la memoria
-    };
-    console.log("Riproduzione audio IA...");
+    try {
+        const audioUrl = URL.createObjectURL(audioBlob);
+        const audio = new Audio(audioUrl);
+        audio.play()
+            .then(() => console.log("Riproduzione audio ricevuto (probabilmente eco)..."))
+            .catch(e => console.error("Errore durante audio.play():", e));
+        audio.onended = () => {
+            URL.revokeObjectURL(audioUrl);
+        };
+        responseArea.innerHTML += `<i>Riproduzione eco audio...</i><br>`;
+    } catch (e) {
+        console.error("Errore durante la creazione o riproduzione dell'audio Blob:", e);
+        responseArea.innerHTML += `<i>Errore riproduzione audio Blob.</i><br>`;
+    }
 }
 
-// All'avvio della pagina, prova a connettere il WebSocket
+// All'avvio della pagina
 connectWebSocket();
-startButton.disabled = true; // Inizia disabilitato finché il WS non è connesso
+startButton.disabled = true;
 stopButton.disabled = true;
