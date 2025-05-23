@@ -1,75 +1,129 @@
+// File: script.js (per Leonardo Realtime)
+
 const startButton = document.getElementById('startButton');
 const stopButton = document.getElementById('stopButton');
 const statusMessage = document.getElementById('statusMessage');
-const transcriptionArea = document.getElementById('transcriptionArea');
-const responseArea = document.getElementById('responseArea');
+const transcriptionArea = document.getElementById('transcriptionArea'); // Potremmo non usarlo subito
+const responseArea = document.getElementById('responseArea');       // Potremmo non usarlo subito
 
-let isRecording = false; // Per tenere traccia se stiamo "registrando"
+let socket;
+let mediaRecorder;
+let audioChunks = [];
 
-// SIMULAZIONE: In futuro, qui useremo le API del browser per registrare l'audio reale
-// e inviarlo. Per ora, simuliamo l'invio di testo.
+const REALTIME_API_ENDPOINT_PATH = '/api/leonardo-realtime'; // Il percorso del nostro backend WebSocket
 
-startButton.addEventListener('click', async () => {
-    if (isRecording) return; // Evita registrazioni multiple
-    isRecording = true;
+function connectWebSocket() {
+    // Determina il protocollo WebSocket (ws o wss) e l'host
+    const protocol = window.location.protocol === 'https:' ? 'wss:' : 'ws:';
+    const host = window.location.host;
+    const socketURL = `${protocol}//${host}${REALTIME_API_ENDPOINT_PATH}`;
 
-    statusMessage.textContent = 'Leonardo sta ascoltando...';
-    transcriptionArea.textContent = ''; // Pulisce trascrizione precedente
-    responseArea.textContent = '';    // Pulisce risposta precedente
-    startButton.disabled = true;
-    stopButton.disabled = false;
+    statusMessage.textContent = `Tentativo di connessione a: ${socketURL}`;
+    console.log(`Tentativo di connessione WebSocket a: ${socketURL}`);
 
-    // SIMULAZIONE dell'utente che parla per qualche secondo
-    console.log('Simulazione: Utente inizia a parlare...');
-    await new Promise(resolve => setTimeout(resolve, 2000)); // Simula 2 secondi di parlato
+    socket = new WebSocket(socketURL);
 
-    const userText = "Ciao Leonardo, come stai oggi?"; // Testo utente simulato
-    transcriptionArea.textContent = `Tu: ${userText}`;
-    console.log(`Simulazione: Utente ha detto: "${userText}"`);
-
-    statusMessage.textContent = 'Elaborazione della richiesta...';
-
-    try {
-        // Chiamata al nostro backend (che sarà una serverless function su Vercel)
-        const response = await fetch('/api/communicate', {
-            method: 'POST',
-            headers: {
-                'Content-Type': 'application/json',
-            },
-            body: JSON.stringify({ message: userText }),
-        });
-
-        if (!response.ok) {
-            throw new Error(`Errore dal server: ${response.statusText}`);
-        }
-
-        const data = await response.json();
-        responseArea.textContent = `Leonardo: ${data.reply}`;
-        statusMessage.textContent = 'Leonardo ha risposto.';
-        console.log('Risposta ricevuta dal backend:', data.reply);
-
-    } catch (error) {
-        console.error('Errore durante la comunicazione con il backend:', error);
-        statusMessage.textContent = 'Errore nella comunicazione. Riprova.';
-        responseArea.textContent = `Errore: ${error.message}`;
-    } finally {
-        isRecording = false;
+    socket.onopen = () => {
+        statusMessage.textContent = 'Connesso a Leonardo Realtime! Pronto per parlare.';
+        console.log('WebSocket Connesso!');
         startButton.disabled = false;
         stopButton.disabled = true;
-        console.log('Simulazione: Fine interazione.');
+    };
+
+    socket.onmessage = (event) => {
+        // Qui riceveremo l'audio dalla IA o altri messaggi
+        // Per ora, facciamo solo un log
+        console.log('Messaggio ricevuto dal server:', event.data);
+        // In futuro, se event.data è un Blob audio, lo riprodurremo
+        if (event.data instanceof Blob) {
+            playAudio(event.data);
+        } else {
+            // Se è testo (es. trascrizioni o messaggi di stato)
+            responseArea.textContent = `Leonardo (server): ${event.data}`;
+        }
+    };
+
+    socket.onerror = (error) => {
+        statusMessage.textContent = 'Errore WebSocket. Vedi console.';
+        console.error('Errore WebSocket:', error);
+        startButton.disabled = true; // Disabilita se non possiamo connetterci
+    };
+
+    socket.onclose = (event) => {
+        statusMessage.textContent = 'WebSocket disconnesso. Riprova a connetterti?';
+        console.log('WebSocket Disconnesso:', event.reason, `Codice: ${event.code}`);
+        startButton.disabled = true;
+        // Potremmo tentare una riconnessione automatica qui o fornire un pulsante
+    };
+}
+
+startButton.addEventListener('click', async () => {
+    if (!socket || socket.readyState !== WebSocket.OPEN) {
+        statusMessage.textContent = 'WebSocket non connesso. Tentativo di riconnessione...';
+        connectWebSocket(); // Prova a connetterti se non lo sei
+        return;
+    }
+
+    statusMessage.textContent = 'Avvio registrazione...';
+    startButton.disabled = true;
+    stopButton.disabled = false;
+    audioChunks = [];
+
+    try {
+        const stream = await navigator.mediaDevices.getUserMedia({ audio: true });
+        mediaRecorder = new MediaRecorder(stream);
+
+        mediaRecorder.ondataavailable = (event) => {
+            if (event.data.size > 0) {
+                audioChunks.push(event.data);
+                // Invio immediato del chunk audio via WebSocket
+                // socket.send(event.data); // <--- LO ABILITEREMO NEL PROSSIMO STEP
+                console.log('Chunk audio registrato, pronto per essere inviato (invio disabilitato per ora)');
+            }
+        };
+
+        mediaRecorder.onstop = () => {
+            // Questo blocco non è più il principale per l'invio se inviamo in streaming
+            // Ma può essere utile per inviare un segnale di "fine parlato"
+            console.log('Registrazione fermata.');
+            if (socket && socket.readyState === WebSocket.OPEN) {
+                 // socket.send(JSON.stringify({ type: "EndOfSpeech" })); // Segnale di fine (futuro)
+            }
+            // Per ora, non facciamo nulla qui con i chunk accumulati se inviamo in streaming
+        };
+
+        mediaRecorder.start(500); // Invia dati ogni 500ms (o un altro intervallo)
+                                // Questo abilita lo streaming dal client
+        console.log('MediaRecorder avviato, invia dati ogni 500ms.');
+
+    } catch (err) {
+        console.error('Errore accesso al microfono:', err);
+        statusMessage.textContent = 'Errore microfono. Controlla i permessi.';
+        startButton.disabled = false;
+        stopButton.disabled = true;
     }
 });
 
 stopButton.addEventListener('click', () => {
-    // In una vera app, questo fermerebbe la registrazione audio e/o la risposta della IA
-    isRecording = false;
+    if (mediaRecorder && mediaRecorder.state === 'recording') {
+        mediaRecorder.stop();
+    }
     startButton.disabled = false;
     stopButton.disabled = true;
-    statusMessage.textContent = 'Conversazione interrotta dall\'utente.';
-    console.log('Simulazione: Utente ha interrotto la conversazione.');
-    // Potremmo anche voler cancellare transcriptionArea e responseArea
+    statusMessage.textContent = 'Registrazione interrotta. Pronto per iniziare.';
 });
 
-// Stato iniziale
-stopButton.disabled = true; // Il pulsante Stop è disabilitato all'inizio
-statusMessage.textContent = 'Pronto per iniziare. Clicca "Parla".';
+function playAudio(audioBlob) {
+    const audioUrl = URL.createObjectURL(audioBlob);
+    const audio = new Audio(audioUrl);
+    audio.play();
+    audio.onended = () => {
+        URL.revokeObjectURL(audioUrl); // Pulisce la memoria
+    };
+    console.log("Riproduzione audio IA...");
+}
+
+// All'avvio della pagina, prova a connettere il WebSocket
+connectWebSocket();
+startButton.disabled = true; // Inizia disabilitato finché il WS non è connesso
+stopButton.disabled = true;
