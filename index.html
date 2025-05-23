@@ -4,53 +4,17 @@
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
     <title>Leonardo IA</title>
-    <style>
-        body {
-            display: flex;
-            flex-direction: column;
-            align-items: center;
-            justify-content: center;
-            height: 100vh;
-            margin: 0;
-            font-family: sans-serif;
-            background-color: #f0f0f0;
-        }
-        .button {
-            padding: 20px 40px;
-            font-size: 24px;
-            border: none;
-            border-radius: 10px;
-            color: white;
-            cursor: pointer;
-            margin: 10px;
-            min-width: 200px; /* Larghezza minima per uniformità */
-            text-align: center;
-        }
-        #startButton {
-            background-color: green;
-        }
-        #stopButton {
-            background-color: red;
-        }
-        /* Aggiungiamo uno stato per quando Leonardo ascolta/pensa */
-        #statusMessage {
-            margin-top: 20px;
-            font-size: 18px;
-            color: #333;
-        }
-    </style>
+    <link rel="stylesheet" href="style.css">
 </head>
 <body>
-
-    <h1>Leonardo IA</h1>
-
-    <button id="startButton" class="button">Parla</button>
-    <button id="stopButton" class="button">Stop</button>
-
-    <div id="statusMessage">Pronto per iniziare...</div>
-
-    <!-- Qui andrebbe il codice JavaScript per far funzionare i pulsanti -->
-    <!-- <script src="script.js"></script> -->
-
+    <div class="container">
+        <h1>Leonardo IA</h1>
+        <button id="startButton" class="button start-button">Parla</button>
+        <button id="stopButton" class="button stop-button">Stop</button>
+        <div id="statusMessage">Pronto per iniziare...</div>
+        <div id="transcriptionArea" class="transcription-area"></div>
+        <div id="responseArea" class="response-area"></div>
+    </div>
+    <script src="script.js"></script>
 </body>
 </html>
