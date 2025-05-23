@@ -9,8 +9,7 @@
     "start": "echo 'Nessun comando start specifico, Vercel gestisce'"
   },
   "dependencies": {
-    "openai": "^4.47.1",
-    "ws": "^8.17.0"      // <--- AGGIUNTA PER WEBSOCKETS (la versione potrebbe variare)
+    "openai": "^4.47.1"
   },
   "devDependencies": {},
   "engines": {
