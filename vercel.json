@@ -5,7 +5,5 @@
       "src": "/api/leonardo-realtime",
       "dest": "/api/leonardo-realtime"
     }
-    // Vercel dovrebbe gestire automaticamente i file statici (index.html ecc.) dalla root.
-    // Se dopo questa modifica i file statici non funzionano, aggiungeremo qui una regola per loro.
   ]
 }
