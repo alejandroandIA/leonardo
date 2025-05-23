@@ -1,0 +1,20 @@
+{
+  "name": "leonardo-ia-app",
+  "version": "0.1.0",
+  "private": true,
+  "description": "App di conversazione IA Leonardo",
+  "scripts": {
+    "dev": "echo 'Nessun comando dev specifico per solo frontend/api, usa il deploy di Vercel'",
+    "build": "echo 'Nessun comando build specifico per solo frontend/api, Vercel gestisce'",
+    "start": "echo 'Nessun comando start specifico, Vercel gestisce'"
+  },
+  "dependencies": {
+    
+  },
+  "devDependencies": {
+    
+  },
+  "engines": {
+    "node": ">=18.0.0" 
+  }
+}
