@@ -1,46 +1,70 @@
 // File: api/leonardo-realtime.js
-// Questo è inteso per funzionare come una Vercel Edge Function o Serverless Function
-// che gestisce una connessione WebSocket.
-// La gestione diretta dei server WebSocket in ambienti serverless standard può essere complessa.
-// Vercel Edge Functions sono più adatte.
+// Progettato per Vercel Edge Functions per gestire WebSockets (Echo Server).
 
-// Per ora, questo è un placeholder MOLTO SEMPLICE per vedere se Vercel può gestire
-// l'upgrade di una richiesta HTTP a WebSocket.
-// La vera implementazione con la libreria 'ws' potrebbe richiedere un setup diverso
-// specifico per l'ambiente Vercel Edge.
+export const config = {
+  runtime: 'edge', // Specifica che questa è una Edge Function
+};
 
-export default async function handler(req, res) {
-    // Questo endpoint HTTP è solo per confermare che la funzione è deployata.
-    // La vera logica WebSocket dovrebbe essere gestita in modo diverso,
-    // spesso Vercel "passa" la richiesta a un gestore WebSocket se la richiesta
-    // include gli header di upgrade WebSocket.
+export default async function handler(request) {
+  const upgradeHeader = request.headers.get('upgrade');
+  if (upgradeHeader !== 'websocket') {
+    return new Response('Expected websocket upgrade', { status: 426 });
+  }
 
-    // Se il client prova a fare un upgrade a WebSocket, Vercel
-    // dovrebbe idealmente passare la gestione a un codice che usa la libreria 'ws'
-    // MA questo non è così semplice in una serverless function standard.
-    // Questo codice qui è più per un test HTTP base della funzione.
+  // Questo è il pattern standard per l'upgrade a WebSocket nelle Edge Runtime APIs
+  const { socket: clientSocket, response } = Deno.upgradeWebSocket(request);
+  // In Vercel, Deno.upgradeWebSocket potrebbe non essere disponibile,
+  // e si usa un approccio con TransformStream come visto prima, oppure Vercel fornisce un suo helper.
+  // Per Vercel, il pattern più comune è:
+  // const { readable, writable } = new TransformStream();
+  // const serverResponse = new Response(readable, { status: 101, webSocket: writable });
+  // const serverSocket = serverResponse.webSocket; // Questo è il socket LATO SERVER
 
-    if (req.method === 'GET') {
-        res.status(200).send('Leonardo Realtime API Endpoint. Pronto per connessioni WebSocket (teoricamente).');
+  // Proviamo a usare il pattern TransformStream che è più standard per le Edge generiche
+  // se Deno.upgradeWebSocket non è l'API corretta per Vercel Edge (spesso è per Deno Deploy)
+
+  const pair = new WebSocketPair();
+  const [client, server] = Object.values(pair); // client è per la response, server è per noi
+
+  server.accept(); // Accetta la connessione WebSocket sul lato server
+
+  server.onopen = () => {
+    console.log("Backend Edge: Connessione WebSocket stabilita con il client.");
+    server.send("Backend Edge: Connessione WebSocket stabilita! Sono un echo server.");
+  };
+
+  server.onmessage = (event) => {
+    const messageData = event.data;
+    if (typeof messageData === 'string') {
+      console.log("Backend Edge: Ricevuto testo dal client:", messageData);
+      server.send(`Echo: ${messageData}`);
+    } else if (messageData instanceof ArrayBuffer || messageData instanceof Uint8Array) {
+      // Se riceviamo ArrayBuffer (comune per audio da MediaRecorder se inviato come tale)
+      console.log("Backend Edge: Ricevuti dati binari (ArrayBuffer/Uint8Array) dal client (lunghezza):", messageData.byteLength);
+      server.send(messageData); // Rimanda i dati binari indietro così come sono
+    } else if (messageData instanceof Blob) {
+        // Se il client invia Blob (meno comune per lo streaming diretto ma possibile)
+        console.log("Backend Edge: Ricevuto Blob dal client (dimensione):", messageData.size);
+        // Per rimandare un Blob, dobbiamo leggerlo come ArrayBuffer prima
+        messageData.arrayBuffer().then(arrayBuffer => {
+            server.send(arrayBuffer);
+        }).catch(e => console.error("Errore nel leggere il Blob:", e));
     } else {
-        res.setHeader('Allow', ['GET']);
-        res.status(405).end(`Metodo ${req.method} Non Permesso su questo endpoint HTTP.`);
+        console.log("Backend Edge: Ricevuto messaggio di tipo sconosciuto:", messageData);
     }
+  };
 
-    // LA PARTE EFFETTIVA DEL SERVER WEBSOCKET ANDREBBE QUI, MA È PIÙ COMPLESSO:
-    // Per un vero server WebSocket con la libreria 'ws' su Vercel,
-    // spesso si configura un server HTTP e poi si attacca il WebSocketServer ad esso.
-    // Le Edge Functions di Vercel hanno un modo più nativo per gestire i WebSockets
-    // che non assomiglia a questo codice.
+  server.onclose = (event) => {
+    console.log("Backend Edge: Client disconnesso.", `Codice: ${event.code}, Motivo: ${event.reason}`);
+  };
 
-    // Questo è un punto in cui avremo bisogno di adattarci a come Vercel
-    // gestisce al meglio i WebSockets persistenti nelle sue funzioni.
-    // Per ora, facciamo il deploy di questo per vedere se il frontend può "chiamare" questo percorso.
+  server.onerror = (error) => {
+    console.error("Backend Edge: Errore WebSocket:", error);
+  };
+  
+  // Restituisce la risposta che fa l'upgrade della connessione, passando il lato client del WebSocket
+  return new Response(null, {
+    status: 101, // Switching Protocols
+    webSocket: client, // Questo è il lato del WebSocket che il browser userà
+  });
 }
-
-// NOTA IMPORTANTE:
-// Il codice sopra NON implementa un server WebSocket funzionante per la libreria 'ws'.
-// È un placeholder per illustrare la difficoltà.
-// Una vera implementazione WebSocket per Vercel Edge Functions userebbe
-// l'oggetto `request` della Fetch API e la sua capacità di fare `upgrade` a WebSocket.
-// Per ora, ci concentreremo sul frontend che tenta di connettersi.
