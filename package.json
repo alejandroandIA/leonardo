@@ -8,13 +8,9 @@
     "build": "echo 'Nessun comando build specifico per solo frontend/api, Vercel gestisce'",
     "start": "echo 'Nessun comando start specifico, Vercel gestisce'"
   },
-  "dependencies": {
-    
-  },
-  "devDependencies": {
-    
-  },
+  "dependencies": {},
+  "devDependencies": {},
   "engines": {
-    "node": ">=18.0.0" 
+    "node": ">=18.0.0"
   }
 }
