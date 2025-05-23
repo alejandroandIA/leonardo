@@ -1,5 +1,5 @@
 // File: api/leonardo-realtime.js
-// Tentativo n.3 per Vercel Edge Functions WebSocket (Echo Server) - CORREZIONE SINTASSI
+// Tentativo n.4 - Debug dell'header 'upgrade' e handshake più semplice
 
 export const config = {
   runtime: 'edge',
@@ -7,69 +7,77 @@ export const config = {
 
 export default async function handler(request) {
   const upgradeHeader = request.headers.get('upgrade');
-  if (upgradeHeader?.toLowerCase() !== 'websocket') {
-    // Se non è una richiesta di upgrade WebSocket, restituisci un errore o gestiscila come una normale HTTP.
-    // Per semplicità, restituiamo un errore.
-    return new Response('Richiesta HTTP normale a un endpoint WebSocket. Atteso upgrade a WebSocket.', { status: 400 });
+  const connectionHeader = request.headers.get('connection'); // Controlliamo anche questo
+
+  console.log("Backend Edge: Richiesta ricevuta. Header 'upgrade':", upgradeHeader);
+  console.log("Backend Edge: Header 'connection':", connectionHeader);
+
+  // Verifichiamo se la richiesta è effettivamente una richiesta di upgrade a WebSocket
+  // Il client dovrebbe inviare:
+  // Upgrade: websocket
+  // Connection: Upgrade (o contenere 'Upgrade')
+  if (upgradeHeader?.toLowerCase() !== 'websocket' || !connectionHeader?.toLowerCase().includes('upgrade')) {
+    console.log("Backend Edge: La richiesta non sembra essere un upgrade WebSocket valido. Restituisco 400.");
+    // Logghiamo tutti gli header per il debug
+    for (let [key, value] of request.headers) {
+        console.log(`Header: ${key}: ${value}`);
+    }
+    return new Response('Richiesta non valida per l\'upgrade a WebSocket. Header mancanti o non corretti.', { status: 400 });
   }
 
+  // Se siamo qui, la richiesta è un tentativo di upgrade a WebSocket.
+  console.log("Backend Edge: Tentativo di upgrade a WebSocket riconosciuto.");
+
   try {
-    // WebSocketPair è lo standard per creare una coppia di socket nelle API Edge.
-    // clientWs va restituito nella Response per l'handshake con il browser.
-    // serverWs è l'oggetto che usiamo nel backend per comunicare.
     const { 0: clientWs, 1: serverWs } = new WebSocketPair();
 
-    // Il server deve "accettare" la sua parte della connessione.
-    serverWs.accept(); 
+    serverWs.accept();
+    console.log("Backend Edge: serverWs.accept() chiamato.");
 
-    // Invia un messaggio di benvenuto al client appena la connessione è stabilita.
-    serverWs.send("Backend Edge (WebSocketPair): Connesso! Echo server attivo.");
-    console.log("Backend Edge (WebSocketPair): Connessione aperta, messaggio di benvenuto inviato.");
+    // Non inviare subito un messaggio da serverWs.onopen, ma aspetta che il client invii qualcosa
+    // o invia un messaggio semplice *dopo* aver restituito la response 101.
+    // Lo facciamo qui per semplicità, ma idealmente sarebbe in un gestore 'open'.
 
-    // Gestore per i messaggi ricevuti dal client.
+    serverWs.addEventListener('open', () => {
+        console.log("Backend Edge: Evento 'open' su serverWs.");
+        serverWs.send("Backend Edge: Connesso! Echo server attivo.");
+    });
+    
     serverWs.addEventListener('message', (event) => {
       const messageData = event.data;
       if (typeof messageData === 'string') {
-        console.log("Backend Edge (WebSocketPair): Ricevuto testo:", messageData);
-        serverWs.send(`Echo: ${messageData}`); // Rimanda indietro il testo con "Echo:"
+        console.log("Backend Edge: Ricevuto testo:", messageData);
+        serverWs.send(`Echo: ${messageData}`);
       } else if (messageData instanceof ArrayBuffer) {
-        console.log("Backend Edge (WebSocketPair): Ricevuto ArrayBuffer (lunghezza):", messageData.byteLength);
-        serverWs.send(messageData); // Rimanda indietro i dati binari (audio) così come sono.
+        console.log("Backend Edge: Ricevuto ArrayBuffer (lunghezza):", messageData.byteLength);
+        serverWs.send(messageData);
       } else {
-        // Gestisce altri tipi di dati se necessario, o logga un avviso.
-        console.log("Backend Edge (WebSocketPair): Ricevuto tipo di messaggio sconosciuto:", typeof messageData);
-        serverWs.send("Ricevuto tipo di messaggio sconosciuto dal backend.");
+        console.log("Backend Edge: Ricevuto tipo sconosciuto:", typeof messageData);
+        serverWs.send("Ricevuto tipo di messaggio sconosciuto.");
       }
     });
 
-    // Gestore per la chiusura della connessione.
     serverWs.addEventListener('close', (event) => {
-      console.log("Backend Edge (WebSocketPair): Connessione chiusa.", `Codice: ${event.code}, Motivo: ${event.reason}`);
+      console.log("Backend Edge: Connessione chiusa.", event.code, event.reason);
     });
 
-    // Gestore per errori WebSocket.
     serverWs.addEventListener('error', (errorEvent) => {
-      // L'oggetto errore effettivo è spesso in errorEvent.error o errorEvent.message
-      console.error("Backend Edge (WebSocketPair): Errore WebSocket:", errorEvent.message || errorEvent.error || errorEvent);
+      console.error("Backend Edge: Errore WebSocket:", errorEvent.message || errorEvent.error || errorEvent);
     });
-
-    // Restituisce la risposta HTTP 101 (Switching Protocols) al client,
-    // passando il lato "client" del WebSocketPair. Questo completa l'handshake.
+    
+    console.log("Backend Edge: Sto per restituire la Response 101 con clientWs.");
+    // Restituisci la risposta 101 con il lato client del WebSocketPair
     return new Response(null, {
       status: 101,
-      webSocket: clientWs, // Questo è cruciale per l'handshake
+      webSocket: clientWs,
       headers: {
         'Upgrade': 'websocket',
         'Connection': 'Upgrade'
-        // Nessuna virgola dopo l'ultima intestazione
       }
-      // Nessuna virgola dopo l'ultimo oggetto 'headers'
     });
 
   } catch (e) {
-    // Gestisce errori che potrebbero verificarsi durante l'inizializzazione di WebSocketPair
-    // o altre eccezioni impreviste nel blocco try.
     console.error("Errore grave durante l'inizializzazione di WebSocketPair o gestione:", e);
-    return new Response("Errore interno del server nell'inizializzazione WebSocket.", { status: 500 });
+    return new Response(`Errore interno del server nell'inizializzazione WebSocket: ${e.message}`, { status: 500 });
   }
 }
