@@ -1,25 +1,11 @@
 {
   "version": 2,
-  "builds": [
-    {
-      "src": "package.json",
-      "use": "@vercel/node" 
-      // Anche se abbiamo Edge Functions, a volte specificare un builder base aiuta.
-      // Se abbiamo solo Edge Functions, potremmo non aver bisogno della sezione "builds".
-      // Per ora la lasciamo per vedere se ha un impatto.
-    }
-  ],
   "routes": [
     {
       "src": "/api/leonardo-realtime",
       "dest": "/api/leonardo-realtime"
-      // Questa è una route "pass-through" molto semplice.
-      // Non stiamo aggiungendo header qui, ma solo definendo la route esplicitamente.
-    },
-    // Assicurati che anche i tuoi file statici (index.html, ecc.) vengano serviti.
-    // Se sono nella root, Vercel di solito li gestisce automaticamente.
-    // Se questo causasse problemi con i file statici, potremmo dover aggiungere:
-    // { "handle": "filesystem" },
-    // { "src": "/(.*)", "dest": "/index.html" } // o più specifico
+    }
+    // Vercel dovrebbe gestire automaticamente i file statici (index.html ecc.) dalla root.
+    // Se dopo questa modifica i file statici non funzionano, aggiungeremo qui una regola per loro.
   ]
 }
