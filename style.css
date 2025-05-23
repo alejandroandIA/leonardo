@@ -1,0 +1,66 @@
+body {
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    justify-content: center;
+    min-height: 100vh;
+    margin: 0;
+    font-family: Arial, sans-serif;
+    background-color: #f0f2f5;
+    color: #333;
+}
+
+.container {
+    text-align: center;
+    background-color: #ffffff;
+    padding: 30px;
+    border-radius: 10px;
+    box-shadow: 0 4px 8px rgba(0, 0, 0, 0.1);
+}
+
+h1 {
+    color: #1a73e8; /* Un blu tech */
+}
+
+.button {
+    padding: 15px 30px;
+    font-size: 18px;
+    border: none;
+    border-radius: 8px;
+    color: white;
+    cursor: pointer;
+    margin: 10px;
+    transition: background-color 0.3s ease;
+    min-width: 150px;
+}
+
+.start-button {
+    background-color: #28a745; /* Verde */
+}
+.start-button:hover {
+    background-color: #218838;
+}
+
+.stop-button {
+    background-color: #dc3545; /* Rosso */
+}
+.stop-button:hover {
+    background-color: #c82333;
+}
+
+#statusMessage {
+    margin-top: 20px;
+    font-size: 16px;
+    color: #555;
+    min-height: 20px; /* Per evitare salti di layout */
+}
+
+.transcription-area, .response-area {
+    margin-top: 15px;
+    padding: 10px;
+    border: 1px solid #ddd;
+    border-radius: 5px;
+    min-height: 40px;
+    background-color: #f9f9f9;
+    text-align: left;
+}
