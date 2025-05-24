@@ -10,7 +10,7 @@
   },
   "dependencies": {
     "openai": "^4.47.1", 
-    "ably": "^1.2.47"      
+    "ably": "1.2.50"      // Versione specifica di Ably per testare
   },
   "devDependencies": {},
   "engines": {
