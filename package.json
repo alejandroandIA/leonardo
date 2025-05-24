@@ -2,17 +2,22 @@
   "name": "leonardo-ia-app",
   "version": "0.1.0",
   "private": true,
-  "description": "App di conversazione IA Leonardo con Ably",
+  "description": "App di conversazione IA Leonardo con Realtime API OpenAI",
   "scripts": {
-    "dev": "echo 'Nessun comando dev specifico per solo frontend/api, usa il deploy di Vercel'",
-    "build": "echo 'Nessun comando build specifico per solo frontend/api, Vercel gestisce'",
-    "start": "echo 'Nessun comando start specifico, Vercel gestisce'"
+    "dev": "vercel dev", // Utile per testare localmente le Edge Functions
+    "build": "echo 'Nessun comando build specifico per il client, Vercel gestisce le funzioni Edge'",
+    "start": "echo 'Usa vercel dev per sviluppo locale'"
   },
   "dependencies": {
-    "openai": "^4.47.1", 
-    "ably": "1.2.50"      
+    "openai": "^4.47.1" // Già presente, ottimo.
+                         // L'SDK OpenAI potrebbe non essere usato direttamente nella Edge Function se
+                         // si comunica via WebSocket puro, ma tenerlo non fa male.
   },
-  "devDependencies": {},
+  "devDependencies": {
+    "typescript": "^5.0.0", // O la versione più recente
+    "@cloudflare/workers-types": "^4.20240403.0" // O la versione più recente
+    // "vercel": "^33.0.0" // Opzionale, se vuoi usare CLI di Vercel per comandi specifici
+  },
   "engines": {
     "node": ">=18.0.0"
   }
