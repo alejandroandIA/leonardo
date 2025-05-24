@@ -2,14 +2,15 @@
   "name": "leonardo-ia-app",
   "version": "0.1.0",
   "private": true,
-  "description": "App di conversazione IA Leonardo con Realtime API",
+  "description": "App di conversazione IA Leonardo con Ably",
   "scripts": {
     "dev": "echo 'Nessun comando dev specifico per solo frontend/api, usa il deploy di Vercel'",
     "build": "echo 'Nessun comando build specifico per solo frontend/api, Vercel gestisce'",
     "start": "echo 'Nessun comando start specifico, Vercel gestisce'"
   },
   "dependencies": {
-    "openai": "^4.47.1"
+    "openai": "^4.47.1", 
+    "ably": "^1.2.47"      // Assicurati che questa versione sia ragionevolmente aggiornata
   },
   "devDependencies": {},
   "engines": {
