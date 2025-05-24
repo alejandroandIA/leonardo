@@ -4,7 +4,7 @@ export const config = {
   runtime: 'edge',
 };
 
-const OPENAI_MODEL_ID = process.env.OPENAI_REALTIME_MODEL_ID || "gpt-4o-realtime";
+const OPENAI_MODEL_ID = process.env.OPENAI_REALTIME_MODEL_ID || "gpt-4o-realtime-preview-2024-10-01";
 const OPENAI_API_KEY = process.env.OPENAI_API_KEY;
 const OPENAI_VOICE_ID = process.env.OPENAI_VOICE_ID || "alloy";
 const SYSTEM_PROMPT = process.env.SYSTEM_PROMPT || "Sei Leonardo, un assistente IA colloquiale.";
@@ -64,15 +64,15 @@ export default async function handler(request: Request): Promise<Response> {
         type: "session.update",
         session: {
           voice: OPENAI_VOICE_ID,
-          input_audio_format: {
-            codec: "opus",
+          input_audio_format: { /* Assumendo che l'API possa gestire Opus direttamente. Altrimenti, specificare PCM e il client/edge deve convertire. */
+            codec: "opus", 
           },
           output_audio_format: { 
-            codec: "opus",
-            sample_rate: 24000
+            codec: "opus", /* Opus è efficiente per lo streaming. */
+            sample_rate: 24000 /* Sample rate comune per output TTS di qualità. */
           },
           instructions: SYSTEM_PROMPT,
-          language: "it"
+          language: "it" /* Specifica la lingua per migliorare accuratezza e latenza. */
         }
       };
       if (openaiWs && openaiWs.readyState === WebSocket.OPEN) {
@@ -133,6 +133,9 @@ export default async function handler(request: Request): Promise<Response> {
                     const audioEvent = {
                       type: "input_audio_buffer.append",
                       audio: base64Audio
+                      /* Se l'API richiede formato per ogni chunk: 
+                      format: { codec: "opus" } 
+                      */
                     };
                     openaiWs.send(JSON.stringify(audioEvent));
                 } catch (e: any) {
