@@ -9,12 +9,9 @@ let mediaRecorder;
 let audioContext;
 let audioQueue = [];
 let isPlaying = false;
-let userSpeaking = false;
 
 const INPUT_AUDIO_MIMETYPE = 'audio/webm;codecs=opus';
 const INPUT_AUDIO_TIMESLICE_MS = 250;
-// const OUTPUT_AUDIO_SAMPLE_RATE = 24000; // Necessario se si lavora con PCM raw
-
 const WEBSOCKET_ENDPOINT_PATH = '/api/leonardo-realtime';
 
 function initializeWebSocket() {
@@ -26,12 +23,10 @@ function initializeWebSocket() {
     const host = window.location.host;
     const socketURL = `${protocol}//${host}${WEBSOCKET_ENDPOINT_PATH}`;
 
-    console.log(`Tentativo di connessione WebSocket a: ${socketURL}`);
     clientWebSocket = new WebSocket(socketURL);
 
     clientWebSocket.onopen = () => {
         statusMessage.textContent = 'Leonardo è pronto! Clicca "Parla".';
-        console.log('WebSocket Connesso al backend Vercel!');
         startButton.disabled = false;
         stopButton.disabled = true;
     };
@@ -39,40 +34,56 @@ function initializeWebSocket() {
     clientWebSocket.onmessage = async (event) => {
         if (event.data instanceof Blob || event.data instanceof ArrayBuffer) {
             const audioData = event.data;
-            const audioBlob = (audioData instanceof Blob) ? audioData : new Blob([audioData]);
+            const audioBlob = (audioData instanceof Blob) ? audioData : new Blob([audioData], {type: 'audio/opus'});
             audioQueue.push(audioBlob);
             playQueue();
         } else if (typeof event.data === 'string') {
-            console.log('Messaggio di testo/JSON ricevuto dal server:', event.data);
             try {
                 const data = JSON.parse(event.data);
-                if (data.type === 'transcription_update' && data.transcript) {
-                    transcriptionArea.textContent = data.transcript;
-                } else if (data.type === 'final_transcription' && data.transcript) {
+                if (data.type === "conversation.item.input_audio_transcription.delta" && data.delta) {
+                    transcriptionArea.textContent = (transcriptionArea.textContent || "") + data.delta;
+                } else if (data.type === "conversation.item.input_audio_transcription.completed" && data.transcript) {
                     transcriptionArea.textContent = data.transcript;
                     appendMessageToResponseArea(`<strong>Tu:</strong> ${data.transcript}`);
-                } else if (data.type === 'error' && data.message) {
-                    console.error("Errore da Leonardo (server):", data.message);
-                    statusMessage.textContent = `Errore: ${data.message}`;
-                    appendMessageToResponseArea(`<i>Errore da Leonardo: ${data.message}</i>`, 'error');
-                } else if (data.type === 'ai_status' && data.message) {
-                    // Esempio: statusMessage.textContent = `Leonardo: ${data.message}`;
+                } else if (data.type === "response.text.delta" && data.delta) {
+                     let currentResponse = responseArea.querySelector('.leonardo-partial-response');
+                     if (!currentResponse) {
+                         currentResponse = document.createElement('div');
+                         currentResponse.classList.add('leonardo-partial-response');
+                         appendMessageToResponseArea('', 'info', currentResponse); // Aggiunge div vuoto
+                     }
+                     currentResponse.innerHTML = `<strong>Leonardo:</strong> ${(currentResponse.textContent.replace("Leonardo: ", "") || "") + data.delta}`;
+                } else if (data.type === "response.done" && data.response && data.response.output) {
+                    let finalResponseText = "";
+                    data.response.output.forEach(outputItem => {
+                        if (outputItem.type === "text") {
+                            finalResponseText += outputItem.text;
+                        }
+                    });
+                    let partialResponse = responseArea.querySelector('.leonardo-partial-response');
+                    if (partialResponse) {
+                        partialResponse.innerHTML = `<strong>Leonardo:</strong> ${finalResponseText}`;
+                        partialResponse.classList.remove('leonardo-partial-response');
+                    } else if (finalResponseText) {
+                         appendMessageToResponseArea(`<strong>Leonardo:</strong> ${finalResponseText}`);
+                    }
+                } else if (data.type && data.type.toLowerCase().includes("error")) {
+                    appendMessageToResponseArea(`<i>Errore da Leonardo: ${data.message || JSON.stringify(data)}</i>`, 'error');
                 }
             } catch (e) {
-                console.warn('Messaggio di testo non-JSON ricevuto:', event.data);
+                /* Messaggio non JSON o non gestito specificamente */
             }
         }
     };
 
     clientWebSocket.onerror = (error) => {
-        statusMessage.textContent = 'Errore WebSocket. Controlla la console.';
+        statusMessage.textContent = 'Errore WebSocket. Controlla la console del browser.';
         console.error('Errore WebSocket:', error);
         enableStartButton();
     };
 
     clientWebSocket.onclose = (event) => {
-        statusMessage.textContent = `Disconnesso da Leonardo. (Codice: ${event.code})`;
-        console.log('WebSocket Disconnesso:', event.reason, `Codice: ${event.code}`);
+        statusMessage.textContent = `Disconnesso da Leonardo. (Codice: ${event.code} - ${event.reason || 'Nessun motivo'})`;
         enableStartButton();
         if (mediaRecorder && mediaRecorder.state === 'recording') {
             mediaRecorder.stop();
@@ -118,22 +129,24 @@ async function playQueue() {
     try {
         await playAudioData(blobToPlay);
     } catch (e) {
-        // Errore già gestito e loggato da playAudioData
+        /* Errore già gestito */
     } finally {
         isPlaying = false;
         if (audioQueue.length > 0) {
             setTimeout(playQueue, 50);
-        } else {
-            console.log("Coda audio IA esaurita.");
         }
     }
 }
 
-function appendMessageToResponseArea(htmlContent, type = 'info') {
-    const messageDiv = document.createElement('div');
-    messageDiv.classList.add('message', `message-${type}`);
-    messageDiv.innerHTML = htmlContent;
-    responseArea.appendChild(messageDiv);
+function appendMessageToResponseArea(htmlContent, type = 'info', elementToUpdate = null) {
+    if (elementToUpdate) {
+        elementToUpdate.innerHTML = htmlContent;
+    } else {
+        const messageDiv = document.createElement('div');
+        messageDiv.classList.add('message', `message-${type}`);
+        messageDiv.innerHTML = htmlContent;
+        responseArea.appendChild(messageDiv);
+    }
     responseArea.scrollTop = responseArea.scrollHeight;
 }
 
@@ -148,23 +161,19 @@ function enableStartButton() {
 }
 
 startButton.addEventListener('click', async () => {
-    userSpeaking = true;
     if (!clientWebSocket || clientWebSocket.readyState !== WebSocket.OPEN) {
-        statusMessage.textContent = 'WebSocket non connesso. Tentativo di riconnessione...';
         initializeWebSocket();
         return;
     }
     
     statusMessage.textContent = 'Avvio registrazione... Parla ora!';
     disableStartButton();
-    transcriptionArea.textContent = "";
+    transcriptionArea.textContent = ""; 
 
     try {
         const stream = await navigator.mediaDevices.getUserMedia({ audio: true });
-        
         const options = { mimeType: INPUT_AUDIO_MIMETYPE };
         if (!MediaRecorder.isTypeSupported(options.mimeType)) {
-            console.warn(`${options.mimeType} non supportato, provo con il default del browser.`);
             delete options.mimeType;
         }
         
@@ -177,8 +186,9 @@ startButton.addEventListener('click', async () => {
         };
 
         mediaRecorder.onstop = () => {
-            console.log('Registrazione locale fermata.');
             stream.getTracks().forEach(track => track.stop());
+            /* Se VAD è abilitato su OpenAI, non serve inviare 'input_audio_buffer.commit' o 'response.create' dal client
+               a meno che non si voglia un controllo manuale esplicito. */
         };
 
         mediaRecorder.onerror = (event) => {
@@ -188,21 +198,27 @@ startButton.addEventListener('click', async () => {
         };
         
         mediaRecorder.start(INPUT_AUDIO_TIMESLICE_MS); 
-
     } catch (err) {
         console.error('Errore ottenimento microfono o avvio MediaRecorder:', err);
-        statusMessage.textContent = `Errore microfono: ${err.message}. Assicurati di aver dato i permessi.`;
+        statusMessage.textContent = `Errore microfono: ${err.message}.`;
         enableStartButton();
     }
 });
 
 stopButton.addEventListener('click', () => {
-    userSpeaking = false;
     if (mediaRecorder && mediaRecorder.state === 'recording') {
         mediaRecorder.stop();
     }
+    /* 
+      Se VAD è abilitato su OpenAI, l'IA dovrebbe rilevare lo stop.
+      Se vuoi forzare la fine del turno utente e la risposta dell'IA (con VAD disabilitato o per interruzione):
+      if (clientWebSocket && clientWebSocket.readyState === WebSocket.OPEN) {
+        clientWebSocket.send(JSON.stringify({ type: "input_audio_buffer.commit" }));
+        clientWebSocket.send(JSON.stringify({ type: "response.create" }));
+      }
+    */
     enableStartButton();
-    statusMessage.textContent = 'Conversazione interrotta. Clicca "Parla" per ricominciare.';
+    statusMessage.textContent = 'Conversazione interrotta.';
     audioQueue = []; 
 });
 
