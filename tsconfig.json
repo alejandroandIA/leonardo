@@ -1,0 +1,23 @@
+{
+  "compilerOptions": {
+    "target": "es2020",
+    "module": "esnext",
+    "moduleResolution": "node",
+    "lib": ["es2020", "webworker"], // "webworker" per l'ambiente Edge, "dom" non serve qui
+    "types": ["@cloudflare/workers-types"],
+    "esModuleInterop": true,
+    "strict": true,
+    "skipLibCheck": true,
+    "forceConsistentCasingInFileNames": true,
+    "outDir": ".vercel/output/functions/_ts", // o non specificare se Vercel gestisce la build
+    "resolveJsonModule": true,
+    "isolatedModules": true,
+    "noEmit": true, // Vercel gestisce la compilazione, noi solo il type checking
+    "allowJs": true // Se hai file .js che vuoi includere nel check
+  },
+  "include": [
+    "api/**/*.ts",
+    // Aggiungi altri percorsi se necessario, es. "lib/**/*.ts"
+  ],
+  "exclude": ["node_modules"]
+}
