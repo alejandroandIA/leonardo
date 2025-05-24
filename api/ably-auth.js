@@ -3,32 +3,33 @@ import Ably from 'ably';
 
 export default async function handler(req, res) {
     if (!process.env.ABLY_SERVER_API_KEY) {
-        console.error("FATAL ERROR: ABLY_SERVER_API_KEY non è configurata nelle variabili d'ambiente di Vercel.");
-        return res.status(500).json({ error: 'Configurazione del server Ably mancante. Impossibile autenticare il client.' });
+        console.error("FATAL ERROR: ABLY_SERVER_API_KEY non è configurata.");
+        return res.status(500).json({ error: 'Configurazione del server Ably mancante.' });
     }
 
     try {
+        // Usa Ably.Rest per operazioni server-side come la creazione di token
         const ably = new Ably.Rest({ key: process.env.ABLY_SERVER_API_KEY });
-        const clientIdForToken = 'client-' + Math.random().toString(36).substring(2, 11); // Genera un clientId casuale
+        
+        const clientIdForToken = 'client-' + Math.random().toString(36).substring(2, 11);
 
         const tokenParams = {
             clientId: clientIdForToken,
             capability: { 
-                // Permessi specifici per il canale che useremo
                 'leonardo-chat': ['subscribe', 'publish', 'presence'] 
-                // Puoi aggiungere altri canali o pattern se necessario
-                // '*': ['subscribe', 'publish'] // Meno sicuro, dà accesso a tutti i canali
-            },
-            // ttl: 3600 * 1000 // opzionale: 1 ora in millisecondi
+            }
+            // ttl: 3600 * 1000 // opzionale
         };
 
-        const tokenRequest = await ably.auth.createTokenRequest(tokenParams);
+        // createTokenRequest restituisce una Promise che si risolve con la TokenRequest (oggetto JSON)
+        const tokenRequestData = await ably.auth.createTokenRequest(tokenParams);
         
-        console.log(`Token Ably generato con successo per clientId: ${clientIdForToken}`);
-        res.status(200).json(tokenRequest); // Invia la TokenRequest (oggetto JSON) al client
+        console.log(`Token Ably (TokenRequestData) generato con successo per clientId: ${clientIdForToken}`);
+        // Invia l'oggetto TokenRequest direttamente, come si aspetta l'SDK client di Ably
+        res.status(200).json(tokenRequestData);
 
     } catch (error) {
-        console.error('Errore durante la generazione del token Ably:', error.message, error.statusCode, error.code);
+        console.error('Errore durante la generazione del token Ably:', error.message, error.statusCode, error.code, error.stack);
         res.status(error.statusCode || 500).json({ 
             error: `Impossibile generare il token Ably: ${error.message}`,
             errorCode: error.code 
