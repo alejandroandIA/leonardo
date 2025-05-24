@@ -1,164 +1,146 @@
-// File: script.js (per Leonardo Realtime con Edge Backend)
+ // File: script.js (Modificato per Autenticazione a Token Ably)
 
-const startButton = document.getElementById('startButton');
-const stopButton = document.getElementById('stopButton');
-const statusMessage = document.getElementById('statusMessage');
-const transcriptionArea = document.getElementById('transcriptionArea');
-const responseArea = document.getElementById('responseArea');
+ const startButton = document.getElementById('startButton');
+ const stopButton = document.getElementById('stopButton');
+ const statusMessage = document.getElementById('statusMessage');
+ const transcriptionArea = document.getElementById('transcriptionArea');
+ const responseArea = document.getElementById('responseArea');
 
-let socket;
-let mediaRecorder;
-// let audioChunks = []; // Non accumuliamo più, inviamo subito
+ let ably;
+ let channel;
+ let mediaRecorder;
+ let localClientId; // Memorizzeremo il clientId qui
 
-const REALTIME_API_ENDPOINT_PATH = '/api/leonardo-realtime';
+ function initializeAbly() {
+     statusMessage.textContent = "Autenticazione con Ably...";
+     console.log("Inizializzazione Ably con autenticazione a token...");
 
-function connectWebSocket() {
-    const protocol = window.location.protocol === 'https:' ? 'wss:' : 'ws:';
-    const host = window.location.host;
-    const socketURL = `${protocol}//${host}${REALTIME_API_ENDPOINT_PATH}`;
+     try {
+         // @ts-ignore
+         ably = new Ably.Realtime({
+             authUrl: '/api/ably-auth', 
+         });
 
-    statusMessage.textContent = `Connessione a: ${socketURL}`;
-    console.log(`Tentativo di connessione WebSocket a: ${socketURL}`);
-    responseArea.innerHTML = ''; 
+         ably.connection.on('connected', () => {
+             localClientId = ably.auth.clientId; // Salva il clientId fornito dal token
+             statusMessage.textContent = `Connesso ad Ably (ID: ${localClientId})! Pronto.`;
+             console.log(`Ably Connesso! Client ID: ${localClientId}`);
+             startButton.disabled = false;
+             stopButton.disabled = true;
+             setupChannel();
+         });
 
-    socket = new WebSocket(socketURL);
-    socket.binaryType = "arraybuffer"; // Importante per ricevere audio come ArrayBuffer
+         ably.connection.on('failed', (error) => {
+             statusMessage.textContent = 'Connessione Ably fallita. Vedi console.';
+             console.error('Connessione Ably fallita:', error);
+             startButton.disabled = true;
+         });
+         
+         ably.connection.on('disconnected', (error) => {
+             statusMessage.textContent = 'Disconnesso da Ably.';
+             console.log('Disconnesso da Ably.', error?.reason);
+             startButton.disabled = true;
+         });
 
-    socket.onopen = () => {
-        statusMessage.textContent = 'Connesso a Leonardo Realtime!';
-        console.log('WebSocket Connesso!');
-        startButton.disabled = false;
-        stopButton.disabled = true;
-        socket.send("Ciao dal Client! (Testo)"); // Invia un messaggio di testo di test
-    };
+         ably.connection.on('suspended', () => {
+             statusMessage.textContent = 'Connessione Ably sospesa.';
+             console.warn('Connessione Ably sospesa.');
+             startButton.disabled = true;
+         });
 
-    socket.onmessage = (event) => {
-        let currentContent = responseArea.innerHTML;
-        if (event.data instanceof ArrayBuffer) {
-            console.log('Ricevuto ArrayBuffer audio dal server (dimensione):', event.data.byteLength);
-            currentContent += `<i>Ricevuto ArrayBuffer audio (eco, dimensione: ${event.data.byteLength})</i><br>`;
-            // Converti ArrayBuffer in Blob per la riproduzione
-            const audioBlob = new Blob([event.data], { type: 'audio/webm' }); // Assumiamo webm per l'eco
-            playAudio(audioBlob);
-        } else if (typeof event.data === 'string') {
-            console.log('Ricevuto testo dal server:', event.data);
-            currentContent += `${event.data}<br>`;
-        } else {
-            console.log('Ricevuto messaggio di tipo sconosciuto:', event.data);
-             currentContent += `<i>Ricevuto dato sconosciuto.</i><br>`;
-        }
-        responseArea.innerHTML = currentContent;
-        responseArea.scrollTop = responseArea.scrollHeight; 
-    };
+     } catch (e) {
+         statusMessage.textContent = "Errore durante l'inizializzazione di Ably. Hai incluso la libreria Ably?";
+         console.error("Errore inizializzazione Ably:", e);
+         startButton.disabled = true;
+     }
+ }
 
-    socket.onerror = (error) => {
-        statusMessage.textContent = 'Errore WebSocket. Vedi console.';
-        console.error('Errore WebSocket:', error);
-        startButton.disabled = true;
-    };
+ function setupChannel() {
+     channel = ably.channels.get('leonardo-chat'); 
 
-    socket.onclose = (event) => {
-        statusMessage.textContent = 'WebSocket disconnesso.';
-        console.log('WebSocket Disconnesso:', event.reason, `Codice: ${event.code}`);
-        startButton.disabled = true;
-    };
-}
+     channel.subscribe('text-reply', (message) => { // Ascolta solo i messaggi per tutti o specifici per questo client
+         console.log('Testo ricevuto da Ably:', message.data, "per clientId:", message.clientId);
+          // Potresti voler mostrare solo se message.clientId è il server o se non c'è clientId (broadcast)
+         responseArea.innerHTML += `Leonardo: ${message.data.text}<br>`; // Assumiamo che il backend invii { text: "..." }
+     });
 
-startButton.addEventListener('click', async () => {
-    if (!socket || socket.readyState !== WebSocket.OPEN) {
-        statusMessage.textContent = 'WebSocket non connesso.';
-        return;
-    }
+      channel.subscribe('audio-reply', (message) => { 
+         console.log('Audio IA ricevuto da Ably:', message.data, "per clientId:", message.clientId);
+         // Assumiamo che il backend invii { audioChunk: ArrayBuffer }
+         if (message.data && message.data.audioChunk instanceof ArrayBuffer) {
+             const audioBlob = new Blob([message.data.audioChunk], { type: 'audio/webm' });
+             playAudio(audioBlob, "Audio IA da Ably");
+         } else {
+              console.warn("Ricevuto 'audio-reply' ma il formato non è ArrayBuffer in audioChunk:", message.data);
+         }
+     });
 
-    statusMessage.textContent = 'Avvio registrazione...';
-    startButton.disabled = true;
-    stopButton.disabled = false;
-    responseArea.innerHTML = ''; 
-    transcriptionArea.textContent = "Stato: In attesa di audio...";
+     console.log("Sottoscritto al canale Ably 'leonardo-chat'");
+     channel.publish('client-status', { message: `Client ${localClientId} connesso e pronto!` });
+ }
 
+ startButton.addEventListener('click', async () => {
+     if (!ably || ably.connection.state !== 'connected') {
+         statusMessage.textContent = 'Non connesso ad Ably.';
+         return;
+     }
+     statusMessage.textContent = 'Avvio registrazione...';
+     startButton.disabled = true; stopButton.disabled = false;
+     transcriptionArea.textContent = "Stato: In attesa di audio...";
+     responseArea.innerHTML = ""; // Pulisce risposte precedenti
 
-    try {
-        const stream = await navigator.mediaDevices.getUserMedia({ audio: true });
-        // Prova con mimeType specifici se ci sono problemi, altrimenti lascia che il browser scelga
-        const options = { mimeType: 'audio/webm;codecs=opus' }; 
-        if (!MediaRecorder.isTypeSupported(options.mimeType)) {
-            console.warn(`${options.mimeType} non supportato, provo default.`);
-            delete options.mimeType;
-        }
-        mediaRecorder = new MediaRecorder(stream, options);
+     try {
+         const stream = await navigator.mediaDevices.getUserMedia({ audio: true });
+         const options = { mimeType: 'audio/webm;codecs=opus' };
+         if (!MediaRecorder.isTypeSupported(options.mimeType)) {
+             console.warn(`${options.mimeType} non supportato, usando default.`);
+             delete options.mimeType;
+         }
+         mediaRecorder = new MediaRecorder(stream, options);
+         mediaRecorder.ondataavailable = (event) => {
+             if (event.data.size > 0 && channel) {
+                 event.data.arrayBuffer().then(arrayBuffer => {
+                     // Includi il clientId per permettere al backend di sapere chi ha inviato (opzionale)
+                     channel.publish('audio-stream', { audioChunk: arrayBuffer, clientId: localClientId });
+                     console.log(`Chunk audio (ArrayBuffer) inviato ad Ably da ${localClientId}:`, arrayBuffer.byteLength);
+                     transcriptionArea.textContent = `Stato: Invio audio chunk (${arrayBuffer.byteLength} bytes)...`;
+                 });
+             }
+         };
+         mediaRecorder.onstop = () => {
+             console.log('Registrazione fermata.');
+             transcriptionArea.textContent = "Stato: Registrazione fermata.";
+             if (channel) channel.publish('audio-stream', { endOfStream: true, clientId: localClientId });
+             stream.getTracks().forEach(track => track.stop()); // Rilascia il microfono
+         };
+         mediaRecorder.start(300); // Invia dati ogni 300ms
+         transcriptionArea.textContent = "Stato: Registrazione avviata...";
+     } catch (err) {
+         console.error('Errore microfono/MediaRecorder:', err);
+         statusMessage.textContent = `Errore microfono: ${err.message}. Controlla i permessi.`;
+         startButton.disabled = false; stopButton.disabled = true;
+     }
+ });
 
-        mediaRecorder.ondataavailable = (event) => {
-            if (event.data.size > 0) {
-                if (socket && socket.readyState === WebSocket.OPEN) {
-                    // MediaRecorder fornisce un Blob, convertiamolo in ArrayBuffer per inviarlo
-                    // se il backend si aspetta ArrayBuffer, o invia il Blob direttamente
-                    // se il backend sa gestire i Blob (vedi api/leonardo-realtime.js)
-                    
-                    // Invia come ArrayBuffer:
-                    event.data.arrayBuffer().then(arrayBuffer => {
-                        socket.send(arrayBuffer);
-                        console.log('Chunk audio (ArrayBuffer) inviato al server (dimensione):', arrayBuffer.byteLength);
-                        transcriptionArea.textContent = `Stato: Invio audio chunk (${arrayBuffer.byteLength} bytes)...`;
-                    });
-                    
-                    // O invia come Blob (se il backend è stato adattato):
-                    // socket.send(event.data); 
-                    // console.log('Chunk audio (Blob) inviato al server (dimensione):', event.data.size);
-                    // transcriptionArea.textContent = `Stato: Invio audio chunk (${event.data.size} bytes)...`;
+ stopButton.addEventListener('click', () => {
+     if (mediaRecorder && mediaRecorder.state === 'recording') mediaRecorder.stop();
+     startButton.disabled = false; stopButton.disabled = true;
+     statusMessage.textContent = 'Pronto per iniziare.';
+     transcriptionArea.textContent = "";
+ });
 
-                }
-            }
-        };
+ function playAudio(audioBlob, source = "Audio") {
+     try {
+         const audioUrl = URL.createObjectURL(audioBlob);
+         const audio = new Audio(audioUrl);
+         audio.play().catch(e => console.error(`Errore ${source} audio.play():`, e));
+         audio.onended = () => URL.revokeObjectURL(audioUrl);
+         console.log(`Riproduzione ${source}...`);
+         responseArea.innerHTML += `<i>Riproduzione ${source}...</i><br>`;
+     } catch (e) { console.error(`Errore creazione/riproduzione ${source} Blob:`, e); }
+ }
 
-        mediaRecorder.onstop = () => {
-            console.log('Registrazione fermata dal client.');
-            transcriptionArea.textContent = "Stato: Registrazione fermata.";
-            if (socket && socket.readyState === WebSocket.OPEN) {
-                 socket.send(JSON.stringify({ type: "EndOfSpeech" })); // Segnale di fine
-            }
-            stream.getTracks().forEach(track => track.stop()); // Rilascia il microfono
-        };
-        
-        mediaRecorder.start(300); // Intervallo in ms per ondataavailable
-        transcriptionArea.textContent = "Stato: Registrazione avviata, invio audio...";
-        console.log('MediaRecorder avviato, invia dati audio in streaming.');
-
-    } catch (err) {
-        console.error('Errore accesso al microfono o MediaRecorder:', err);
-        statusMessage.textContent = 'Errore microfono. Controlla i permessi.';
-        startButton.disabled = false;
-        stopButton.disabled = true;
-    }
-});
-
-stopButton.addEventListener('click', () => {
-    if (mediaRecorder && mediaRecorder.state === 'recording') {
-        mediaRecorder.stop();
-    }
-    startButton.disabled = false;
-    stopButton.disabled = true;
-    statusMessage.textContent = 'Pronto per iniziare.';
-    transcriptionArea.textContent = "";
-});
-
-function playAudio(audioBlob) {
-    try {
-        const audioUrl = URL.createObjectURL(audioBlob);
-        const audio = new Audio(audioUrl);
-        audio.play()
-            .then(() => console.log("Riproduzione audio ricevuto (probabilmente eco)..."))
-            .catch(e => console.error("Errore durante audio.play():", e));
-        audio.onended = () => {
-            URL.revokeObjectURL(audioUrl);
-        };
-        responseArea.innerHTML += `<i>Riproduzione eco audio...</i><br>`;
-    } catch (e) {
-        console.error("Errore durante la creazione o riproduzione dell'audio Blob:", e);
-        responseArea.innerHTML += `<i>Errore riproduzione audio Blob.</i><br>`;
-    }
-}
-
-// All'avvio della pagina
-connectWebSocket();
-startButton.disabled = true;
-stopButton.disabled = true;
+ // Avvia l'inizializzazione di Ably quando lo script viene caricato
+ initializeAbly();
+ startButton.disabled = true; 
+ stopButton.disabled = true;
