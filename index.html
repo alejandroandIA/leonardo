@@ -5,8 +5,6 @@
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
     <title>Leonardo IA</title>
     <link rel="stylesheet" href="style.css">
-    <!-- Importante: Includi la libreria Ably JavaScript -->
-    <script src="https://cdn.ably.com/lib/ably.min-1.js"></script>
 </head>
 <body>
     <div class="container">
@@ -14,7 +12,7 @@
         
         <div id="controls">
             <button id="startButton" class="button start-button">Parla</button>
-            <button id="stopButton" class="button stop-button">Stop</button>
+            <button id="stopButton" class="button stop-button" disabled>Stop</button>
         </div>
 
         <div id="statusMessage">Inizializzazione...</div>
