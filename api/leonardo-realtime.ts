@@ -37,6 +37,7 @@ export default async function handler(request: Request): Promise<Response> {
 
   const upgradeHeader = request.headers.get('Upgrade');
   if (!upgradeHeader || upgradeHeader.toLowerCase() !== 'websocket') {
+    console.error(`Edge: CRITICAL - 'Upgrade' header is missing or not 'websocket'. Actual value: '${upgradeHeader}'`);
     return new Response('Expected Upgrade: websocket header', { status: 426 });
   }
 
@@ -59,20 +60,24 @@ export default async function handler(request: Request): Promise<Response> {
     openaiWs = new WebSocket(wsUrl, protocols); 
 
     openaiWs.addEventListener('open', () => {
-      console.log("Edge: OpenAI WebSocket connection established.");
       const initialSessionConfig = {
         type: "session.update",
         session: {
           voice: OPENAI_VOICE_ID,
-          input_audio_format: { /* Assumendo che l'API possa gestire Opus direttamente. Altrimenti, specificare PCM e il client/edge deve convertire. */
-            codec: "opus", 
+          input_audio_format: {
+            codec: "opus",
+            /* 
+              Se OpenAI richiede esplicitamente il sample_rate per l'input Opus, 
+              dovrebbe corrispondere a quello del MediaRecorder (tipicamente 48000).
+              Esempio: sample_rate: 48000 
+            */
           },
           output_audio_format: { 
-            codec: "opus", /* Opus è efficiente per lo streaming. */
-            sample_rate: 24000 /* Sample rate comune per output TTS di qualità. */
+            codec: "opus",
+            sample_rate: 24000 
           },
           instructions: SYSTEM_PROMPT,
-          language: "it" /* Specifica la lingua per migliorare accuratezza e latenza. */
+          language: "it"
         }
       };
       if (openaiWs && openaiWs.readyState === WebSocket.OPEN) {
@@ -82,20 +87,25 @@ export default async function handler(request: Request): Promise<Response> {
 
     openaiWs.addEventListener('message', (event: MessageEvent) => {
       if (typeof event.data === 'string') {
-        const serverEvent = JSON.parse(event.data as string);
-
-        if (serverEvent.type === "response.audio.delta" && serverEvent.delta) {
-          const audioChunkBase64 = serverEvent.delta;
-          const audioChunkArrayBuffer = base64ToArrayBuffer(audioChunkBase64);
-          if (server.readyState === WebSocket.OPEN) {
-            server.send(audioChunkArrayBuffer);
-          }
-        } else {
-          if (server.readyState === WebSocket.OPEN) {
-            server.send(event.data);
-          }
+        try {
+            const serverEvent = JSON.parse(event.data as string);
+            if (serverEvent.type === "response.audio.delta" && serverEvent.delta) {
+              const audioChunkBase64 = serverEvent.delta;
+              const audioChunkArrayBuffer = base64ToArrayBuffer(audioChunkBase64);
+              if (server.readyState === WebSocket.OPEN) {
+                server.send(audioChunkArrayBuffer);
+              }
+            } else {
+              if (server.readyState === WebSocket.OPEN) {
+                server.send(event.data); 
+              }
+            }
+        } catch (e) {
+             if (server.readyState === WebSocket.OPEN) {
+                server.send(event.data); 
+              }
         }
-      } else {
+      } else if (event.data instanceof ArrayBuffer || event.data instanceof Blob) {
          if (server.readyState === WebSocket.OPEN) {
             server.send(event.data);
           }
@@ -133,8 +143,11 @@ export default async function handler(request: Request): Promise<Response> {
                     const audioEvent = {
                       type: "input_audio_buffer.append",
                       audio: base64Audio
-                      /* Se l'API richiede formato per ogni chunk: 
-                      format: { codec: "opus" } 
+                      /* 
+                        Se l'API richiede di specificare il formato audio per ogni chunk 'append', 
+                        aggiungilo qui. Ad esempio:
+                        format: { codec: "opus" } 
+                        Tuttavia, è preferibile configurarlo in session.update.
                       */
                     };
                     openaiWs.send(JSON.stringify(audioEvent));
@@ -151,14 +164,12 @@ export default async function handler(request: Request): Promise<Response> {
   });
 
   server.addEventListener('close', async (event: CloseEvent) => {
-    console.log(`Edge: Client WebSocket closed. Code: ${event.code}, Reason: ${event.reason}`);
     if (openaiWs && (openaiWs.readyState === WebSocket.OPEN || openaiWs.readyState === WebSocket.CONNECTING)) {
       openaiWs.close(1000, "Client disconnected");
     }
   });
 
   server.addEventListener('error', (errorEvent) => {
-    console.error("Edge: Client WebSocket error:", errorEvent.message || errorEvent);
     if (openaiWs && (openaiWs.readyState === WebSocket.OPEN || openaiWs.readyState === WebSocket.CONNECTING)) {
       openaiWs.close(1011, "Client error");
     }
