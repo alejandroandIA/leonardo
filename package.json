@@ -10,7 +10,7 @@
   },
   "dependencies": {
     "openai": "^4.47.1", 
-    "ably": "^1.2.47"      // Assicurati che questa versione sia ragionevolmente aggiornata
+    "ably": "^1.2.47"      
   },
   "devDependencies": {},
   "engines": {
