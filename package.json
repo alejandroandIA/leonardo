@@ -4,18 +4,16 @@
   "private": true,
   "description": "App di conversazione IA Leonardo con Realtime API OpenAI",
   "scripts": {
-    "dev": "vercel dev", 
+    "dev": "vercel dev",
     "build": "echo 'Nessun comando build specifico per il client, Vercel gestisce le funzioni Edge'",
     "start": "echo 'Usa vercel dev per sviluppo locale'"
   },
   "dependencies": {
-    "openai": "^4.47.1" 
-                         
+    "openai": "^4.47.1"
   },
   "devDependencies": {
-    "typescript": "^5.0.0", 
-    "@cloudflare/workers-types": "^4.20240403.0" 
-     "vercel": "^33.0.0" 
+    "typescript": "^5.0.0",
+    "@cloudflare/workers-types": "^4.20240403.0"
   },
   "engines": {
     "node": ">=18.0.0"
