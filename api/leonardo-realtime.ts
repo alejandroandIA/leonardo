@@ -64,12 +64,11 @@ export default async function handler(request: Request): Promise<Response> {
         type: "session.update",
         session: {
           voice: OPENAI_VOICE_ID,
-          input_audio_format: {
-            codec: "opus",
-            /* 
-              Se OpenAI richiede esplicitamente il sample_rate per l'input Opus, 
-              dovrebbe corrispondere a quello del MediaRecorder (tipicamente 48000).
-              Esempio: sample_rate: 48000 
+          input_audio_format: { /* OpenAI potrebbe aspettarsi PCM qui. Se "opus" fallisce, prova con PCM. */
+            codec: "opus", 
+            /* Esempio se invii PCM:
+            codec: "pcm_s16le", // PCM 16-bit little-endian
+            sample_rate: 16000 // O il sample rate del tuo audio PCM
             */
           },
           output_audio_format: { 
@@ -139,16 +138,12 @@ export default async function handler(request: Request): Promise<Response> {
             (async () => {
                 try {
                     const arrayBuffer = await (event.data as Blob).arrayBuffer();
+                    /* Se OpenAI richiede PCM, qui dovresti decodificare l'Opus in PCM prima di inviare. */
+                    /* Per ora, inviamo l'Opus (o qualsiasi cosa sia nel Blob) come Base64. */
                     const base64Audio = arrayBufferToBase64(arrayBuffer);
                     const audioEvent = {
                       type: "input_audio_buffer.append",
                       audio: base64Audio
-                      /* 
-                        Se l'API richiede di specificare il formato audio per ogni chunk 'append', 
-                        aggiungilo qui. Ad esempio:
-                        format: { codec: "opus" } 
-                        Tuttavia, è preferibile configurarlo in session.update.
-                      */
                     };
                     openaiWs.send(JSON.stringify(audioEvent));
                 } catch (e: any) {
@@ -156,6 +151,7 @@ export default async function handler(request: Request): Promise<Response> {
                 }
             })();
         } else if (typeof event.data === 'string') {
+            /* Ad esempio, per eventi come response.create se VAD è disabilitato */
             openaiWs.send(event.data);
         }
     } else {
