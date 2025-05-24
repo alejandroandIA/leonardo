@@ -13,9 +13,9 @@
                          
   },
   "devDependencies": {
-    "typescript": "^5.0.0", // O la versione più recente
-    "@cloudflare/workers-types": "^4.20240403.0" // O la versione più recente
-    // "vercel": "^33.0.0" // Opzionale, se vuoi usare CLI di Vercel per comandi specifici
+    "typescript": "^5.0.0", 
+    "@cloudflare/workers-types": "^4.20240403.0" 
+     "vercel": "^33.0.0" 
   },
   "engines": {
     "node": ">=18.0.0"
