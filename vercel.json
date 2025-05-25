@@ -1,9 +1,0 @@
-{
-  "version": 2,
-  "routes": [
-    {
-      "src": "/api/leonardo-realtime",
-      "dest": "/api/leonardo-realtime"
-    }
-  ]
-}
