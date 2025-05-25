@@ -3,33 +3,25 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>Leonardo IA</title>
+    <title>Leonardo IA - Realtime</title>
     <link rel="stylesheet" href="style.css">
 </head>
 <body>
     <div class="container">
-        <h1>Leonardo IA</h1>
-        
+        <h1>Conversazione Realtime con AI</h1>
         <div id="controls">
-            <button id="startButton" class="button start-button">Parla</button>
-            <button id="stopButton" class="button stop-button" disabled>Stop</button>
+            <button id="startButton">Avvia Conversazione</button>
+            <button id="stopButton" disabled>Termina Conversazione</button>
         </div>
-
-        <div id="statusMessage">Inizializzazione...</div>
-        
-        <div class="conversation-areas">
-            <div id="transcriptionAreaContainer">
-                <strong>Tu (trascrizione live):</strong>
-                <div id="transcriptionArea" class="transcription-area"></div>
-            </div>
-            
-            <div id="responseAreaContainer">
-                <strong>Leonardo:</strong>
-                <div id="responseArea" class="response-area"></div>
+        <div id="status">Pronto. Clicca "Avvia" per iniziare.</div>
+        <div class="transcript-container">
+            <h2>Trascrizioni:</h2>
+            <div id="transcripts">
+                <!-- Le trascrizioni appariranno qui -->
             </div>
         </div>
+        <audio id="aiAudioPlayer" autoplay></audio>
     </div>
-
     <script src="script.js"></script>
 </body>
 </html>
