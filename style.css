@@ -1,66 +1,120 @@
+/* File: style.css */
 body {
+    font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, Helvetica, Arial, sans-serif, "Apple Color Emoji", "Segoe UI Emoji", "Segoe UI Symbol";
     display: flex;
     flex-direction: column;
     align-items: center;
-    justify-content: center;
-    min-height: 100vh;
     margin: 0;
-    font-family: Arial, sans-serif;
-    background-color: #f0f2f5;
+    padding: 20px;
+    background-color: #f4f4f9;
     color: #333;
+    min-height: 100vh;
+    box-sizing: border-box;
 }
 
 .container {
+    background-color: #fff;
+    padding: 20px 30px;
+    border-radius: 8px;
+    box-shadow: 0 4px 12px rgba(0, 0, 0, 0.1);
+    width: 100%;
+    max-width: 700px;
     text-align: center;
-    background-color: #ffffff;
-    padding: 30px;
-    border-radius: 10px;
-    box-shadow: 0 4px 8px rgba(0, 0, 0, 0.1);
 }
 
 h1 {
-    color: #1a73e8; /* Un blu tech */
+    color: #2c3e50;
+    margin-bottom: 25px;
 }
 
-.button {
-    padding: 15px 30px;
-    font-size: 18px;
-    border: none;
-    border-radius: 8px;
-    color: white;
-    cursor: pointer;
-    margin: 10px;
-    transition: background-color 0.3s ease;
-    min-width: 150px;
-}
-
-.start-button {
-    background-color: #28a745; /* Verde */
-}
-.start-button:hover {
-    background-color: #218838;
-}
-
-.stop-button {
-    background-color: #dc3545; /* Rosso */
-}
-.stop-button:hover {
-    background-color: #c82333;
-}
-
-#statusMessage {
-    margin-top: 20px;
+#controls button {
+    padding: 12px 20px;
     font-size: 16px;
-    color: #555;
-    min-height: 20px; /* Per evitare salti di layout */
+    margin: 8px;
+    border: none;
+    border-radius: 5px;
+    cursor: pointer;
+    transition: background-color 0.2s ease;
 }
 
-.transcription-area, .response-area {
-    margin-top: 15px;
-    padding: 10px;
-    border: 1px solid #ddd;
-    border-radius: 5px;
-    min-height: 40px;
-    background-color: #f9f9f9;
+#startButton {
+    background-color: #27ae60;
+    color: white;
+}
+
+#startButton:hover {
+    background-color: #229954;
+}
+
+#startButton:disabled {
+    background-color: #bdc3c7;
+    cursor: not-allowed;
+}
+
+#stopButton {
+    background-color: #c0392b;
+    color: white;
+}
+
+#stopButton:hover {
+    background-color: #a93226;
+}
+
+#stopButton:disabled {
+    background-color: #bdc3c7;
+    cursor: not-allowed;
+}
+
+#status {
+    margin-top: 20px;
+    margin-bottom: 20px;
+    font-style: italic;
+    color: #555;
+    min-height: 20px;
+}
+
+.transcript-container {
+    margin-top: 25px;
+    width: 100%;
     text-align: left;
+}
+
+.transcript-container h2 {
+    font-size: 18px;
+    color: #34495e;
+    margin-bottom: 10px;
+    border-bottom: 1px solid #eee;
+    padding-bottom: 5px;
+}
+
+#transcripts {
+    border: 1px solid #e0e0e0;
+    padding: 15px;
+    min-height: 100px;
+    max-height: 300px;
+    overflow-y: auto;
+    border-radius: 5px;
+    background-color: #fdfdfd;
+}
+
+#transcripts div {
+    padding: 8px 10px;
+    margin-bottom: 8px;
+    border-radius: 4px;
+    line-height: 1.5;
+}
+
+#transcripts .tu {
+    background-color: #eaf2f8;
+    text-align: right;
+    margin-left: 40px; 
+}
+
+#transcripts .ai {
+    background-color: #f9ebea; 
+    margin-right: 40px; 
+}
+
+audio {
+    display: none; 
 }
