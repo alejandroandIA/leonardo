@@ -1,5 +1,6 @@
 // File: api/session.js
-import fetch from "node-fetch";
+// NOTA: "import fetch from "node-fetch";" è stato RIMOSSO.
+// Si assume che la versione Node.js su Vercel abbia fetch globale.
 
 export default async function handler(req, res) {
     if (req.method === 'OPTIONS') { // Gestione preflight CORS
@@ -21,7 +22,7 @@ export default async function handler(req, res) {
     }
 
     try {
-        const openAIResponse = await fetch("https://api.openai.com/v1/realtime/sessions", {
+        const openAIResponse = await fetch("https://api.openai.com/v1/realtime/sessions", { // fetch è usato direttamente
             method: "POST",
             headers: {
                 "Authorization": `Bearer ${OPENAI_API_KEY}`,
